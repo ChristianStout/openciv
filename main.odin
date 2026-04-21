@@ -10,6 +10,8 @@ import "core:image/png"
 
 SEED :: 12345
 MAP_SIZE :: [2]int{1983, 1336}
+MAX_CAMERA_ZOOM_OUT :: -1
+MAX_CAMERA_ZOOM_IN :: 3
 
 mkmap :: proc(in_path: string, out_path: string, data: ^GameData) {
     file, err := png.load_from_file(in_path)
@@ -137,13 +139,23 @@ get_height_color :: proc(height: Height) -> rl.Color {
     return rl.RED
 }
 
+handle_mouse_input :: proc(camera: ^rl.Camera2D, data: ^GameData) {
+    mouse_wheel_move := rl.GetMouseWheelMove()
+    if mouse_wheel_move < 0 && camera.zoom >= MAX_CAMERA_ZOOM_OUT {
+        camera.zoom -= 1
+    }
+    if mouse_wheel_move > 0 && camera.zoom <= MAX_CAMERA_ZOOM_IN {
+        camera.zoom += 1
+    }
+}
+
 main :: proc() {
     rl.InitWindow(1983, 1336, "mapstrat")
     rl.SetTargetFPS(144)
     defer rl.CloseWindow()
     camera: rl.Camera2D
 
-    camera.zoom = 2
+    camera.zoom = 1
     camera.target = {0, 0}
 
     data := new(GameData)
@@ -161,11 +173,12 @@ main :: proc() {
         rl.DrawText("Hello, World!", 15, 15, 13, rl.Color{240, 235, 235, 255})
 
         rl.BeginMode2D(camera)
-        defer rl.EndMode2D()
         
         scale: i32 = 1
         height := data.board.height
         i := 0
+
+        handle_mouse_input(&camera, data)
 
         for y in 0..<height {
             for x in 0..<data.board.width {
@@ -175,6 +188,9 @@ main :: proc() {
                 rl.DrawRectangle(cast(i32)x*scale, cast(i32)y*scale, scale, scale, get_height_color(pixel.height))
             }
         }
+
+        rl.EndMode2D()
+        rl.DrawFPS(0, 0)
     }
 }
 
