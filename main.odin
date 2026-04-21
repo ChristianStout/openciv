@@ -9,7 +9,7 @@ import "src/utils"
 import "core:image/png"
 
 SEED :: 12345
-MAP_SIZE :: [2]int{320, 200}
+MAP_SIZE :: [2]int{1983, 1336}
 
 mkmap :: proc(in_path: string, out_path: string, data: ^GameData) {
     file, err := png.load_from_file(in_path)
@@ -64,8 +64,8 @@ mkmap :: proc(in_path: string, out_path: string, data: ^GameData) {
             pixel.height = t
             append(&data.board.pixels, pixel)
 
-            fmt.print("(", x, y, ") ->", r)
-            fmt.printfln(", pixel: %v", pixel)
+            // fmt.print("(", x, y, ") ->", r)
+            // fmt.printfln(", pixel: %v", pixel)
         }
     }
 }
@@ -138,7 +138,7 @@ get_height_color :: proc(height: Height) -> rl.Color {
 }
 
 main :: proc() {
-    rl.InitWindow(1920, 1080, "mapstrat")
+    rl.InitWindow(1983, 1336, "mapstrat")
     rl.SetTargetFPS(144)
     defer rl.CloseWindow()
     camera: rl.Camera2D
@@ -163,18 +163,18 @@ main :: proc() {
         rl.BeginMode2D(camera)
         defer rl.EndMode2D()
         
-        scale: i32 = 4
+        scale: i32 = 1
         height := data.board.height
+        i := 0
 
         for y in 0..<height {
             for x in 0..<data.board.width {
-                pixel := data.board.pixels[y*height+x]
+                
+                pixel := data.board.pixels[i]
+                i += 1
                 rl.DrawRectangle(cast(i32)x*scale, cast(i32)y*scale, scale, scale, get_height_color(pixel.height))
             }
         }
-
-        
-
     }
 }
 
