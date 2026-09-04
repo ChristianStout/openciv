@@ -14,6 +14,9 @@ MAX_CAMERA_ZOOM_OUT :: -1
 MAX_CAMERA_ZOOM_IN :: 3
 
 mkmap :: proc(in_path: string, out_path: string, data: ^GameData) {
+    data.board.colors = rl.LoadTexture("assets/textures/map_colors.png")
+    data.board.height_map = gen_height_color_map()
+
     file, err := png.load_from_file(in_path)
     defer free(file)
 
@@ -23,10 +26,13 @@ mkmap :: proc(in_path: string, out_path: string, data: ^GameData) {
     }
 
     width, height := file.width, file.height
+
+    image := rl.GenImageColor(cast(i32)width, cast(i32)height, data.board.height_map[.Ocean])
+    data.board.image = image
     
     data.board.width = width
     data.board.height = height
-    data.board.pixels = make([dynamic]MapPixel)
+    data.board.pixels = make([dynamic]MapCell)
 
     i := 0
     buf := file.pixels.buf
@@ -40,20 +46,20 @@ mkmap :: proc(in_path: string, out_path: string, data: ^GameData) {
     
             assert(r == g && r == b && a == 255)
 
-            pixel: MapPixel
+            pixel: MapCell
             pixel.loc = [2]int{x, y}
             t: Height
 
             if r == 0 {
                 t = .Ocean
             }
-            else if r > 0 && r <= 51 {
+            else if r > 0 && r <= 15 {
                 t = .Land0
             }
-            else if r > 51 && r <= 102 {
+            else if r > 15 && r <= 42 {
                 t = .Land1
             }
-            else if r > 102 && r <= 153 {
+            else if r > 42 && r <= 153 {
                 t = .Land2
             }
             else if r > 153 && r <= 204 {
@@ -66,16 +72,17 @@ mkmap :: proc(in_path: string, out_path: string, data: ^GameData) {
             pixel.height = t
             append(&data.board.pixels, pixel)
 
+            rl.ImageDrawPixel(&image, cast(i32)x, cast(i32)y, data.board.height_map[t])
+
             // fmt.print("(", x, y, ") ->", r)
             // fmt.printfln(", pixel: %v", pixel)
         }
     }
+    data.board.texture = rl.LoadTextureFromImage(image)
 }
 
 Height :: enum int {
-    DeepOcean,
     Ocean,
-    ShallowWater,
     Land0,
     Land1,
     Land2,
@@ -83,7 +90,7 @@ Height :: enum int {
     Land4,
 }
 
-MapPixel :: struct {
+MapCell :: struct {
     loc: [2]int,
     height: Height,
 }
@@ -95,48 +102,25 @@ GameData :: struct {
 Board :: struct {
     width: int,
     height: int,
-    pixels: [dynamic]MapPixel
+    pixels: [dynamic]MapCell,
+    colors: rl.Texture,
+    height_map: map[Height]rl.Color,
+    image: rl.Image,
+    texture: rl.Texture,
 }
 
-// generate_map :: proc(data: ^GameData) {
-//     max_height := cast(int)Height.Land4
-//
-//     for x in 0..<MAP_SIZE.x {
-//         for y in 0..<MAP_SIZE.y {
-//             val := noise.noise_2d_improve_x(SEED, {cast(f64)x, cast(f64)y})
-//             val = abs(val)
-//             fmt.printfln("noise_val: %v", val)
-//             val *= cast(f32)max_height
-//             fmt.printfln("noise*max_height: %v", val)
-//
-//             val2 := cast(int)val
-//             fmt.printfln("height val: %v", val2)
-//
-//             data.map_[x][y].height = cast(Height)val2
-//         }
-//     }
-// }
+gen_height_color_map :: proc() -> map[Height]rl.Color {
+    height_map := make(map[Height]rl.Color)
+    len: f32 = 1.0
+    
+    height_map[.Ocean] = rl.Color{101, 153, 225, 255}
+    height_map[.Land0] = rl.Color{90, 184, 77, 255}
+    height_map[.Land1] = rl.Color{115, 214, 102, 255}
+    height_map[.Land2] = rl.Color{166, 233, 157, 255}
+    height_map[.Land3] = rl.Color{209, 230, 206, 255}
+    height_map[.Land4] = rl.Color{240, 247, 239, 255}
 
-get_height_color :: proc(height: Height) -> rl.Color {
-    switch height {
-    case .DeepOcean:
-        return rl.Color{22, 33, 54, 255}
-    case .Ocean:
-        return rl.Color{34, 53, 73, 255}
-    case .ShallowWater:
-        return rl.Color{48, 88, 103, 255}
-    case .Land0:
-        return rl.Color{108, 168, 92, 255}
-    case .Land1:
-        return rl.Color{108, 128, 76, 255}
-    case .Land2:
-        return rl.Color{149, 153, 113, 255}
-    case .Land3:
-        return rl.Color{209, 207, 190, 255}
-    case .Land4:
-        return rl.Color{240, 235, 235, 255}
-    }
-    return rl.RED
+    return height_map
 }
 
 handle_mouse_input :: proc(camera: ^rl.Camera2D, data: ^GameData) {
@@ -163,6 +147,7 @@ main :: proc() {
     
     mkmap("iberia.png", "map", data)
     fmt.println("Map generated")
+    height_map := gen_height_color_map()
 
     for !rl.WindowShouldClose() {
         rl.BeginDrawing()
@@ -174,20 +159,36 @@ main :: proc() {
 
         rl.BeginMode2D(camera)
         
-        scale: i32 = 1
+        scale: f32 = 1
         height := data.board.height
         i := 0
 
         handle_mouse_input(&camera, data)
 
-        for y in 0..<height {
-            for x in 0..<data.board.width {
-                
-                pixel := data.board.pixels[i]
-                i += 1
-                rl.DrawRectangle(cast(i32)x*scale, cast(i32)y*scale, scale, scale, get_height_color(pixel.height))
-            }
-        }
+        // for y in 0..<height {
+        //     for x in 0..<data.board.width {
+        //
+        //         pixel := data.board.pixels[i]
+        //         i += 1
+        //         // rl.DrawRectangle(cast(i32)x*scale, cast(i32)y*scale, scale, scale, get_height_color(pixel.height))
+        //         // rl.DrawTexture(data.board.colors, 50, 50, rl.GRAY)
+        //         // rl.DrawTextureRec(data.board.colors, height_map[pixel.height], {cast(f32)x*scale, cast(f32)y*scale}, rl.WHITE)
+        //         // rl.DrawTextureRec()
+        //         // rl.DrawRectangle
+        //     }
+        // }
+        rl.DrawTexture(data.board.texture, 0, 0, rl.WHITE)
+        //
+        // size := 50
+        // height2 := Height.Land0
+        // pos: f32 = 200
+        // m := gen_height_color_map()
+        //
+        // for y in 0..<size {
+        //     for x in 0..<size {
+        //         rl.DrawTextureRec(data.board.colors, m[height2], {cast(f32)x+pos, cast(f32)y+pos}, rl.WHITE)
+        //     }
+        // }
 
         rl.EndMode2D()
         rl.DrawFPS(0, 0)
