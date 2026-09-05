@@ -12,6 +12,8 @@ SEED :: 12345
 MAP_SIZE :: [2]int{1983, 1336}
 MAX_CAMERA_ZOOM_OUT :: -1
 MAX_CAMERA_ZOOM_IN :: 3
+BACKGROUND_COLOR :: rl.Color{0, 0, 38, 255}
+ZOOM_AMOUNT :: 0.3
 
 mkmap :: proc(in_path: string, out_path: string, data: ^GameData) {
     data.board.colors = rl.LoadTexture("assets/textures/map_colors.png")
@@ -116,7 +118,7 @@ gen_height_color_map :: proc() -> map[Height]rl.Color {
     height_map[.Ocean] = rl.Color{101, 153, 225, 255}
     height_map[.Land0] = rl.Color{90, 184, 77, 255}
     height_map[.Land1] = rl.Color{115, 214, 102, 255}
-    height_map[.Land2] = rl.Color{166, 233, 157, 255}
+    height_map[.Land2] = rl.Color{204, 211, 113, 255}
     height_map[.Land3] = rl.Color{209, 230, 206, 255}
     height_map[.Land4] = rl.Color{240, 247, 239, 255}
 
@@ -124,12 +126,19 @@ gen_height_color_map :: proc() -> map[Height]rl.Color {
 }
 
 handle_mouse_input :: proc(camera: ^rl.Camera2D, data: ^GameData) {
+    mouse_pos := rl.GetMousePosition()
     mouse_wheel_move := rl.GetMouseWheelMove()
-    if mouse_wheel_move < 0 && camera.zoom >= MAX_CAMERA_ZOOM_OUT {
-        camera.zoom -= 1
+    mouse_held_down := rl.IsMouseButtonDown(.LEFT)
+    if mouse_wheel_move < 0 && camera.zoom >= MAX_CAMERA_ZOOM_OUT && camera.zoom > ZOOM_AMOUNT {
+        camera.zoom -= ZOOM_AMOUNT
+        camera.target = mouse_pos
     }
     if mouse_wheel_move > 0 && camera.zoom <= MAX_CAMERA_ZOOM_IN {
-        camera.zoom += 1
+        camera.zoom += ZOOM_AMOUNT
+        camera.target = mouse_pos
+    }
+    if mouse_held_down {
+        camera.offset += rl.GetMouseDelta()
     }
 }
 
@@ -153,7 +162,7 @@ main :: proc() {
         rl.BeginDrawing()
         defer rl.EndDrawing()
         
-        rl.ClearBackground(rl.LIGHTGRAY)
+        rl.ClearBackground(BACKGROUND_COLOR)
 
         rl.DrawText("Hello, World!", 15, 15, 13, rl.Color{240, 235, 235, 255})
 
@@ -192,6 +201,7 @@ main :: proc() {
 
         rl.EndMode2D()
         rl.DrawFPS(0, 0)
+        rl.DrawText(fmt.caprint("zoom: %v", camera.zoom), 15, 30, 13, rl.WHITE)
     }
 }
 
